@@ -98,7 +98,7 @@
    of every .c file. This should have no impact in any practical sense.
 
    Another side effect of this design is that getenv() will be called once per
-   every .o file when running in non-instrumented mode; an since getenv() tends
+   every .o file when running in non-instrumented mode; and since getenv() tends
    to be optimized in funny ways, we need to be very careful to save every
    oddball register it may touch.
 
@@ -181,7 +181,9 @@ static const u8* main_payload_32 =
   "  xorl %ecx, %edi\n"
   "  shrl $1, %ecx\n"
   "  movl %ecx, __afl_prev_loc\n"
-#endif /* !COVERAGE_ONLY */
+#else
+  "  movl %ecx, %edi\n"
+#endif /* ^!COVERAGE_ONLY */
   "\n"
 #ifdef SKIP_COUNTS
   "  orb  $1, (%edx, %edi, 1)\n"
@@ -295,7 +297,7 @@ static const u8* main_payload_32 =
   "  call  write\n"
   "  addl  $12, %esp\n"
   "\n"
-  "  pushl $2             /* WUNTRACED */\n"
+  "  pushl $0             /* no flags  */\n"
   "  pushl $__afl_temp    /* status    */\n"
   "  pushl __afl_fork_pid /* PID       */\n"
   "  call  waitpid\n"
@@ -334,7 +336,7 @@ static const u8* main_payload_32 =
   "__afl_die:\n"
   "\n"
   "  xorl %eax, %eax\n"
-  "  call exit\n"
+  "  call _exit\n"
   "\n"
   "__afl_setup_abort:\n"
   "\n"
@@ -388,11 +390,11 @@ static const u8* main_payload_64 =
   "\n"
   "__afl_maybe_log:\n"
   "\n"
-#ifdef  __OpenBSD__
+#if defined(__OpenBSD__)  || (defined(__FreeBSD__) && (__FreeBSD__ < 9))
   "  .byte 0x9f /* lahf */\n"
 #else
   "  lahf\n"
-#endif /* ^__OpenBSD__ */
+#endif /* ^__OpenBSD__, etc */
   "  seto  %al\n"
   "\n"
   "  /* Check if SHM region is already mapped. */\n"
@@ -420,11 +422,11 @@ static const u8* main_payload_64 =
   "__afl_return:\n"
   "\n"
   "  addb $127, %al\n"
-#ifdef  __OpenBSD__
+#if defined(__OpenBSD__)  || (defined(__FreeBSD__) && (__FreeBSD__ < 9))
   "  .byte 0x9e /* sahf */\n"
 #else
   "  sahf\n"
-#endif /* ^__OpenBSD__ */
+#endif /* ^__OpenBSD__, etc */
   "  ret\n"
   "\n"
   ".align 8\n"
@@ -574,7 +576,7 @@ static const u8* main_payload_64 =
   "  movq $" STRINGIFY((FORKSRV_FD + 1)) ", %rdi             /* file desc */\n"
   CALL_L64("write")
   "\n"
-  "  movq $2, %rdx                   /* WUNTRACED */\n"
+  "  movq $0, %rdx                   /* no flags  */\n"
   "  leaq __afl_temp(%rip), %rsi     /* status    */\n"
   "  movq __afl_fork_pid(%rip), %rdi /* PID       */\n"
   CALL_L64("waitpid")
@@ -639,7 +641,7 @@ static const u8* main_payload_64 =
   "__afl_die:\n"
   "\n"
   "  xorq %rax, %rax\n"
-  CALL_L64("exit")
+  CALL_L64("_exit")
   "\n"
   "__afl_setup_abort:\n"
   "\n"

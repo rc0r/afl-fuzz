@@ -73,7 +73,7 @@ of tight loops (otherwise, A ^ A would be obviously equal to B ^ B).
 
 The absence of simple saturating arithmetic opcodes on Intel CPUs means that
 the hit counters can sometimes wrap around to zero. Since this is a fairly
-unlikely and localized event, it's an acceptable performance trade-off.
+unlikely and localized event, it's seen as an acceptable performance trade-off.
 
 2) Detecting new behaviors
 --------------------------
@@ -93,8 +93,9 @@ program state while not having to perform any computationally intensive and
 fragile global comparisons of complex execution traces, and while avoiding the
 scourge of path explosion.
 
-To illustrate, consider that the second trace shown below would be considered
-substantially new because of the presence of new tuples (CA, AE):
+To illustrate the properties of the algorithm, consider that the second trace
+shown below would be considered substantially new because of the presence of
+new tuples (CA, AE):
 
   #1: A -> B -> C -> D -> E
   #2: A -> B -> C -> A -> E
@@ -116,7 +117,7 @@ already-seen execution counts for each tuple.
 
 Changes within the range of a single bucket are ignored; transition from one
 bucket to another is flagged as an interesting change in program control flow,
-and are routed to the evolutionary process outlined in the section below.
+and is routed to the evolutionary process outlined in the section below.
 
 The hit count behavior provides a way to distinguish between potentially
 interesting control flow changes, such as a block of code being executed
@@ -182,7 +183,7 @@ input queue with afl-fuzz:
 The first entry for blind fuzzing ("S") corresponds to executing just a single
 round of testing; the second set of figures ("L") shows the fuzzer running in a
 loop for a number of execution cycles comparable with that of the instrumented
-runs, which required more time to fully process the queue.
+runs, which required more time to fully process the growing queue.
 
 Roughly similar results have been obtained in a separate experiment where the
 fuzzer was modified to compile out all the random fuzzing stages and leave just
@@ -412,7 +413,17 @@ simply stops at the first instrumented function to await commands from
 afl-fuzz.
 
 With fast targets, the fork server can offer considerable performance gains,
-usually between 1.5x and 2x.
+usually between 1.5x and 2x. It is also possible to:
+
+  - Use the fork server in manual ("deferred") mode, skipping over larger,
+    user-selected chunks of initialization code. With some targets, this can
+    produce 10x+ performance gains.
+
+  - Enable "persistent" mode, where a single process is used to try out
+    multiple inputs, greatly limiting the overhead of repetitive fork()
+    calls. As with the previous mode, this requires custom modifications,
+    but can improve the performance of fast targets by a factor of 5 or more
+    - approximating the benefits of in-process fuzzing jobs.
 
 11) Parallelization
 -------------------
@@ -463,3 +474,42 @@ processes.
 
 As a result of these two optimizations, the overhead of the QEMU mode is
 roughly 2-5x, compared to 100x+ for PIN.
+
+13) The afl-analyze tool
+------------------------
+
+The file format analyzer is a simple extension of the minimization algorithm
+discussed earlier on; instead of attempting to remove no-op blocks, the tool
+performs a series of walking byte flips and then annotates runs of bytes
+in the input file.
+
+It uses the following classification scheme:
+
+  - "No-op blocks" - segments where bit flips cause no apparent changes to
+    control flow. Common examples may be comment sections, pixel data within
+    a bitmap file, etc.
+
+  - "Superficial content" - segments where some, but not all, bitflips
+    produce some control flow changes. Examples may include strings in rich
+    documents (e.g., XML, RTF).
+
+  - "Critical stream" - a sequence of bytes where all bit flips alter control
+    flow in different but correlated ways. This may be compressed data, 
+    non-atomically compared keywords or magic values, etc.
+
+  - "Suspected length field" - small, atomic integer that, when touched in
+    any way, causes a consistent change to program control flow, suggestive
+    of a failed length check.
+
+  - "Suspected cksum or magic int" - an integer that behaves similarly to a
+    length field, but has a numerical value that makes the length explanation
+    unlikely. This is suggestive of a checksum or other "magic" integer.
+
+  - "Suspected checksummed block" - a long block of data where any change 
+    always triggers the same new execution path. Likely caused by failing
+    a checksum or a similar integrity check before any subsequent parsing
+    takes place.
+
+  - "Magic value section" - a generic token where changes cause the type
+    of binary behavior outlined earlier, but that doesn't meet any of the
+    other criteria. May be an atomically compared keyword or so.

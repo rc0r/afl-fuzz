@@ -4,7 +4,7 @@
 
    Written and maintained by Michal Zalewski <lcamtuf@google.com>
 
-   Copyright 2013, 2014, 2015 Google Inc. All rights reserved.
+   Copyright 2013, 2014, 2015, 2016 Google Inc. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 
-#include <sys/fcntl.h>
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/shm.h>
@@ -74,21 +73,17 @@ static volatile u8
 /* Classify tuple counts. Instead of mapping to individual bits, as in
    afl-fuzz.c, we map to more user-friendly numbers between 1 and 8. */
 
-#define AREP4(_sym)   (_sym), (_sym), (_sym), (_sym)
-#define AREP8(_sym)   AREP4(_sym),  AREP4(_sym)
-#define AREP16(_sym)  AREP8(_sym),  AREP8(_sym)
-#define AREP32(_sym)  AREP16(_sym), AREP16(_sym)
-#define AREP64(_sym)  AREP32(_sym), AREP32(_sym)
-#define AREP128(_sym) AREP64(_sym), AREP64(_sym)
+static const u8 count_class_lookup[256] = {
 
-static u8 count_class_lookup[256] = {
-
-  /* 0 - 3:       4 */ 0, 1, 2, 3,
-  /* 4 - 7:      +4 */ AREP4(4),
-  /* 8 - 15:     +8 */ AREP8(5),
-  /* 16 - 31:   +16 */ AREP16(6),
-  /* 32 - 127:  +96 */ AREP64(7), AREP32(7),
-  /* 128+:     +128 */ AREP128(8)
+  [0]           = 0,
+  [1]           = 1,
+  [2]           = 2,
+  [3]           = 3,
+  [4 ... 7]     = 4,
+  [8 ... 15]    = 5,
+  [16 ... 31]   = 6,
+  [32 ... 127]  = 7,
+  [128 ... 255] = 8
 
 };
 
@@ -158,10 +153,15 @@ static u32 write_results(void) {
   u8  cco = !!getenv("AFL_CMIN_CRASHES_ONLY"),
       caa = !!getenv("AFL_CMIN_ALLOW_ANY");
 
-  if (!strncmp(out_file,"/dev/", 5)) {
+  if (!strncmp(out_file, "/dev/", 5)) {
 
     fd = open(out_file, O_WRONLY, 0600);
     if (fd < 0) PFATAL("Unable to open '%s'", out_file);
+
+  } else if (!strcmp(out_file, "-")) {
+
+    fd = dup(1);
+    if (fd < 0) PFATAL("Unable to open stdout");
 
   } else {
 
@@ -216,7 +216,7 @@ static void run_target(char** argv) {
   int status = 0;
 
   if (!quiet_mode)
-    SAYF("-- Program output begins --\n");
+    SAYF("-- Program output begins --\n" cRST);
 
   MEM_BARRIER();
 
@@ -279,7 +279,7 @@ static void run_target(char** argv) {
 
   setitimer(ITIMER_REAL, &it, NULL);
 
-  if (waitpid(child_pid, &status, WUNTRACED) <= 0) FATAL("waitpid() failed");
+  if (waitpid(child_pid, &status, 0) <= 0) FATAL("waitpid() failed");
 
   child_pid = 0;
   it.it_value.tv_sec = 0;
@@ -296,7 +296,7 @@ static void run_target(char** argv) {
   classify_counts(trace_bits);
 
   if (!quiet_mode)
-    SAYF("-- Program output ends --\n");
+    SAYF(cRST "-- Program output ends --\n");
 
   if (!child_timed_out && !stop_soon && WIFSIGNALED(status))
     child_crashed = 1;
@@ -333,10 +333,17 @@ static void set_up_environment(void) {
 
   setenv("ASAN_OPTIONS", "abort_on_error=1:"
                          "detect_leaks=0:"
+                         "symbolize=0:"
                          "allocator_may_return_null=1", 0);
 
   setenv("MSAN_OPTIONS", "exit_code=" STRINGIFY(MSAN_ERROR) ":"
+                         "symbolize=0:"
+                         "abort_on_error=1:"
+                         "allocator_may_return_null=1:"
                          "msan_track_origins=0", 0);
+
+  if (getenv("AFL_LD_PRELOAD"))
+    setenv("LD_PRELOAD", getenv("AFL_LD_PRELOAD"), 1);
 
 }
 
@@ -443,7 +450,8 @@ static void usage(u8* argv0) {
        "  -q            - sink program's output and don't show messages\n"
        "  -e            - show edge coverage only, ignore hit counts\n\n"
 
-       "For additional tips, please consult %s/README.\n\n",
+       "This tool displays raw tuple data captured by AFL instrumentation.\n"
+       "For additional help, consult %s/README.\n\n" cRST,
 
        argv0, MEM_LIMIT, doc_path);
 
@@ -521,7 +529,6 @@ static char** get_qemu_argv(u8* own_loc, char** argv, int argc) {
 
   tmp = getenv("AFL_PATH");
 
-
   if (tmp) {
 
     cp = alloc_printf("%s/afl-qemu-trace", tmp);
@@ -553,9 +560,9 @@ static char** get_qemu_argv(u8* own_loc, char** argv, int argc) {
 
   } else ck_free(own_copy);
 
-  if (!access(AFL_PATH "/afl-qemu-trace", X_OK)) {
+  if (!access(BIN_PATH "/afl-qemu-trace", X_OK)) {
 
-    target_path = new_argv[0] = AFL_PATH "/afl-qemu-trace";
+    target_path = new_argv[0] = BIN_PATH "/afl-qemu-trace";
     return new_argv;
 
   }
@@ -600,8 +607,8 @@ int main(int argc, char** argv) {
 
           }
 
-          if (sscanf(optarg, "%llu%c", &mem_limit, &suffix) < 1)
-            FATAL("Bad syntax used for -m");
+          if (sscanf(optarg, "%llu%c", &mem_limit, &suffix) < 1 ||
+              optarg[0] == '-') FATAL("Bad syntax used for -m");
 
           switch (suffix) {
 
@@ -630,7 +637,10 @@ int main(int argc, char** argv) {
 
         if (strcmp(optarg, "none")) {
           exec_tmout = atoi(optarg);
-          if (exec_tmout < 20) FATAL("Dangerously low value of -t");
+
+          if (exec_tmout < 20 || optarg[0] == '-')
+            FATAL("Dangerously low value of -t");
+
         }
 
         break;
@@ -703,8 +713,8 @@ int main(int argc, char** argv) {
 
   if (!quiet_mode) {
 
-    if (!tcnt) FATAL("No instrumentation detected");
-    OKF("Captured %u tuples in '%s'.", tcnt, out_file);
+    if (!tcnt) FATAL("No instrumentation detected" cRST);
+    OKF("Captured %u tuples in '%s'." cRST, tcnt, out_file);
 
   }
 

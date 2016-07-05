@@ -22,10 +22,8 @@ If you are using inverse video, you may want to change your settings, say:
   - For GNOME Terminal, go to Edit > Profile preferences, select the "colors"
     tab, and from the list of built-in schemes, choose "white on black".
 
-  - For the MacOS X Terminal app, go to Preferences > Settings, click on
-    the "Pro" color scheme, and select "Use bright colors for bold text".
-    Then, open a new window using the "Pro" scheme via the Shell > New Window
-    menu (or make "Pro" your default).
+  - For the MacOS X Terminal app, open a new window using the "Pro" scheme via
+    the Shell > New Window menu (or make "Pro" your default).
 
 Alternatively, if you really like your current colors, you can edit config.h
 to comment out USE_COLORS, then do 'make clean all'.
@@ -190,7 +188,7 @@ now. It tells you about the current stage, which can be any of:
     "interesting" 8-, 16-, and 32-bit values to try. The stepover is 8 bits.
 
   - extras - deterministic injection of dictionary terms. This can be shown as
-    "user" or "auto", depending on whether the fuzzer is using an user-supplied
+    "user" or "auto", depending on whether the fuzzer is using a user-supplied
     dictionary (-x) or an auto-created one. You will also see "over" or "insert",
     depending on whether the dictionary words overwrite existing data or are
     inserted by offsetting the remaining data to accommodate their length.
@@ -299,12 +297,6 @@ explanations for variable behavior of the tested program:
   - Use of uninitialized memory in conjunction with some intrinsic sources of
     entropy in the tested binary. This can be indicative of a security bug.
 
-  - Multiple threads executing at once in semi-random order. Not a big deal,
-    but to avoid hiccups, it's best to restrict instrumented programs to a
-    single thread. Check compile-time options or run-time flags. For example,
-    for ImageMagick, you can try --without-threads --disable-openmp; for
-    ffmpeg, look for --disable-pthreads instead.
-
   - Attempts to create files that were already created during previous runs, or
     otherwise interact with some form of persistent state. This is harmless,
     but you may want to instruct the targeted program to write to stdout or to
@@ -317,11 +309,25 @@ explanations for variable behavior of the tested program:
 
     select random();
 
+  - Multiple threads executing at once in semi-random order. This is usually
+    just a nuisance, but if the number of variable paths is very high, try the
+    following options:
+
+    - Use afl-clang-fast from llvm_mode/ - it uses a thread-local tracking
+      model that is less prone to concurrency issues,
+
+    - See if the target can be compiled or run without threads. Common
+      ./configure options include --without-threads, --disable-pthreads, or
+      --disable-openmp.
+
+    - Replace pthreads with GNU Pth (https://www.gnu.org/software/pth/), which
+      allows you to use a deterministic scheduler.
+
 Less likely causes may include running out of disk space, SHM handles, or other
 globally limited resources.
 
-The paths where variable behavior is detected are marked with with a matching
-entry in the <out_dir>/.state/variable_behavior/ directory, so you can look
+The paths where variable behavior is detected are marked with a matching entry
+in the <out_dir>/queue/.state/variable_behavior/ directory, so you can look
 them up easily.
 
 If you can't suppress variable behavior and don't want to see these warnings,

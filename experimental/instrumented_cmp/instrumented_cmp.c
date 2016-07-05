@@ -1,6 +1,17 @@
 /*
 
-   A simple proof-of-concept for instrumented strcpy() or memcpy().
+   american fuzzy lop - instrumented strcmp() or memcmp() proof-of-concept
+   -----------------------------------------------------------------------
+
+   Written and maintained by Michal Zalewski <lcamtuf@google.com>
+
+   Copyright 2015 Google Inc. All rights reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at:
+
+     http://www.apache.org/licenses/LICENSE-2.0
 
    Normally, afl-fuzz will have difficulty ever reaching the code behind
    something like:
@@ -9,7 +20,7 @@
 
    This is because the strcmp() operation is completely opaque to the tool.
    A simple and non-invasive workaround that doesn't require complex code
-   analysis is to replace strcpy(), memcpy(), and equivalents with
+   analysis is to replace strcmp(), memcmp(), and equivalents with
    inlined, non-optimized code.
 
    I am still evaluating the value of doing this, but for time being, here's

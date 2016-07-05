@@ -44,7 +44,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <fcntl.h>
-#include <sys/fcntl.h>
+
 #include <sys/wait.h>
 #include <sys/time.h>
 
@@ -117,6 +117,12 @@ static void edit_params(int argc, char** argv) {
 
 #endif /* __APPLE__ */
 
+  /* Although this is not documented, GCC also uses TEMP and TMP when TMPDIR
+     is not set. We need to check these non-standard variables to properly
+     handle the pass_thru logic later on. */
+
+  if (!tmp_dir) tmp_dir = getenv("TEMP");
+  if (!tmp_dir) tmp_dir = getenv("TMP");
   if (!tmp_dir) tmp_dir = "/tmp";
 
   as_params = ck_alloc((argc + 32) * sizeof(u8*));
@@ -211,7 +217,7 @@ wrap_things_up:
 
 static void add_instrumentation(void) {
 
-  static u8 line[MAX_AS_LINE];
+  static u8 line[MAX_LINE];
 
   FILE* inf;
   FILE* outf;
@@ -242,7 +248,7 @@ static void add_instrumentation(void) {
 
   if (!outf) PFATAL("fdopen() failed");  
 
-  while (fgets(line, MAX_AS_LINE, inf)) {
+  while (fgets(line, MAX_LINE, inf)) {
 
     /* In some cases, we want to defer writing the instrumentation trampoline
        until after all the labels, macros, comments, etc. If we're in this
@@ -444,7 +450,8 @@ static void add_instrumentation(void) {
 
   if (!be_quiet) {
 
-    if (!ins_lines) WARNF("No instrumentation targets found.");
+    if (!ins_lines) WARNF("No instrumentation targets found%s.",
+                          pass_thru ? " (pass-thru mode)" : "");
     else OKF("Instrumented %u locations (%s-bit, %s mode, ratio %u%%).",
              ins_lines, use_64bit ? "64" : "32",
              getenv("AFL_HARDEN") ? "hardened" : "non-hardened",

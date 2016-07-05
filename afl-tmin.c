@@ -4,7 +4,7 @@
 
    Written and maintained by Michal Zalewski <lcamtuf@google.com>
 
-   Copyright 2015 Google Inc. All rights reserved.
+   Copyright 2015, 2016 Google Inc. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
    A simple test case minimizer that takes an input file and tries to remove
    as much data as possible while keeping the binary in a crashing state
    *or* producing consistent instrumentation output (the mode is auto-selected
-   based on initially observed behavior).
+   based on the initially observed behavior).
 
  */
 
@@ -37,7 +37,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 
-#include <sys/fcntl.h>
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/shm.h>
@@ -82,21 +81,17 @@ static volatile u8
 
 /* Classify tuple counts. This is a slow & naive version, but good enough here. */
 
-#define AREP4(_sym)   (_sym), (_sym), (_sym), (_sym)
-#define AREP8(_sym)   AREP4(_sym),  AREP4(_sym)
-#define AREP16(_sym)  AREP8(_sym),  AREP8(_sym)
-#define AREP32(_sym)  AREP16(_sym), AREP16(_sym)
-#define AREP64(_sym)  AREP32(_sym), AREP32(_sym)
-#define AREP128(_sym) AREP64(_sym), AREP64(_sym)
+static const u8 count_class_lookup[256] = {
 
-static u8 count_class_lookup[256] = {
-
-  /* 0 - 3:       4 */ 0, 1, 2, 4,
-  /* 4 - 7:      +4 */ AREP4(8),
-  /* 8 - 15:     +8 */ AREP8(16),
-  /* 16 - 31:   +16 */ AREP16(32),
-  /* 32 - 127:  +96 */ AREP64(64), AREP32(64),
-  /* 128+:     +128 */ AREP128(128)
+  [0]           = 0,
+  [1]           = 1,
+  [2]           = 2,
+  [3]           = 4,
+  [4 ... 7]     = 8,
+  [8 ... 15]    = 16,
+  [16 ... 31]   = 32,
+  [32 ... 127]  = 64,
+  [128 ... 255] = 128
 
 };
 
@@ -303,7 +298,7 @@ static u8 run_target(char** argv, u8* mem, u32 len, u8 first_run) {
 
   setitimer(ITIMER_REAL, &it, NULL);
 
-  if (waitpid(child_pid, &status, WUNTRACED) <= 0) FATAL("waitpid() failed");
+  if (waitpid(child_pid, &status, 0) <= 0) FATAL("waitpid() failed");
 
   child_pid = 0;
   it.it_value.tv_sec = 0;
@@ -322,7 +317,7 @@ static u8 run_target(char** argv, u8* mem, u32 len, u8 first_run) {
   total_execs++;
 
   if (stop_soon) {
-    SAYF(cLRD "\n+++ Minimization aborted by user +++\n" cRST);
+    SAYF(cRST cLRD "\n+++ Minimization aborted by user +++\n" cRST);
     exit(1);
   }
 
@@ -410,7 +405,7 @@ static void minimize(char** argv) {
 
   if (set_len < TMIN_SET_MIN_SIZE) set_len = TMIN_SET_MIN_SIZE;
 
-  ACTF(cBRI "Stage #0: " cNOR "One-time block normalization...");
+  ACTF(cBRI "Stage #0: " cRST "One-time block normalization...");
 
   while (set_pos < in_len) {
 
@@ -458,7 +453,7 @@ next_pass:
   del_len = next_p2(in_len / TRIM_START_STEPS);
   stage_o_len = in_len;
 
-  ACTF(cBRI "Stage #1: " cNOR " Removing blocks of data...");
+  ACTF(cBRI "Stage #1: " cRST "Removing blocks of data...");
 
 next_del_blksize:
 
@@ -466,7 +461,7 @@ next_del_blksize:
   del_pos  = 0;
   prev_del = 1;
 
-  SAYF(cGRA "    Block length = %u, remaining size = %u\n" cNOR,
+  SAYF(cGRA "    Block length = %u, remaining size = %u\n" cRST,
        del_len, in_len);
 
   while (del_pos < in_len) {
@@ -534,14 +529,14 @@ next_del_blksize:
   alpha_del1   = 0;
   syms_removed = 0;
 
-  memset(alpha_map, 0, 256);
+  memset(alpha_map, 0, 256 * sizeof(u32));
 
   for (i = 0; i < in_len; i++) {
     if (!alpha_map[in_data[i]]) alpha_size++;
     alpha_map[in_data[i]]++;
   }
 
-  ACTF(cBRI "Stage #2: " cNOR "Minimizing symbols (%u code point%s)...",
+  ACTF(cBRI "Stage #2: " cRST "Minimizing symbols (%u code point%s)...",
        alpha_size, alpha_size == 1 ? "" : "s");
 
   for (i = 0; i < 256; i++) {
@@ -581,7 +576,7 @@ next_del_blksize:
 
   alpha_del2 = 0;
 
-  ACTF(cBRI "Stage #3: " cNOR "Character minimization...");
+  ACTF(cBRI "Stage #3: " cRST "Character minimization...");
 
   memcpy(tmp_buf, in_data, in_len);
 
@@ -614,10 +609,10 @@ next_del_blksize:
 finalize_all:
 
   SAYF("\n"
-       cGRA "     File size reduced by : " cNOR "%0.02f%% (to %u byte%s)\n"
-       cGRA "    Characters simplified : " cNOR "%0.02f%%\n"
-       cGRA "     Number of execs done : " cNOR "%u\n"
-       cGRA "          Fruitless execs : " cNOR "path=%u crash=%u hang=%s%u\n\n",
+       cGRA "     File size reduced by : " cRST "%0.02f%% (to %u byte%s)\n"
+       cGRA "    Characters simplified : " cRST "%0.02f%%\n"
+       cGRA "     Number of execs done : " cRST "%u\n"
+       cGRA "          Fruitless execs : " cRST "path=%u crash=%u hang=%s%u\n\n",
        100 - ((double)in_len) * 100 / orig_len, in_len, in_len == 1 ? "" : "s",
        ((double)(alpha_d_total)) * 100 / (in_len ? in_len : 1),
        total_execs, missed_paths, missed_crashes, missed_hangs ? cLRD : "",
@@ -650,28 +645,61 @@ static void set_up_environment(void) {
   dev_null_fd = open("/dev/null", O_RDWR);
   if (dev_null_fd < 0) PFATAL("Unable to open /dev/null");
 
-  if (!prog_in)
-    prog_in = alloc_printf(".afl-tmin-temp-%u", getpid());
+  if (!prog_in) {
+
+    u8* use_dir = ".";
+
+    if (!access(use_dir, R_OK | W_OK | X_OK)) {
+
+      use_dir = getenv("TMPDIR");
+      if (!use_dir) use_dir = "/tmp";
+
+      prog_in = alloc_printf("%s/.afl-tmin-temp-%u", use_dir, getpid());
+
+    }
+
+  }
 
   /* Set sane defaults... */
 
   x = getenv("ASAN_OPTIONS");
 
-  if (x && !strstr(x, "abort_on_error=1"))
-    FATAL("Custom ASAN_OPTIONS set without abort_on_error=1 - please fix!");
+  if (x) {
+
+    if (!strstr(x, "abort_on_error=1"))
+      FATAL("Custom ASAN_OPTIONS set without abort_on_error=1 - please fix!");
+
+    if (!strstr(x, "symbolize=0"))
+      FATAL("Custom ASAN_OPTIONS set without symbolize=0 - please fix!");
+
+  }
 
   x = getenv("MSAN_OPTIONS");
 
-  if (x && !strstr(x, "exit_code=" STRINGIFY(MSAN_ERROR)))
-    FATAL("Custom MSAN_OPTIONS set without exit_code="
-          STRINGIFY(MSAN_ERROR) " - please fix!");
+  if (x) {
+
+    if (!strstr(x, "exit_code=" STRINGIFY(MSAN_ERROR)))
+      FATAL("Custom MSAN_OPTIONS set without exit_code="
+            STRINGIFY(MSAN_ERROR) " - please fix!");
+
+    if (!strstr(x, "symbolize=0"))
+      FATAL("Custom MSAN_OPTIONS set without symbolize=0 - please fix!");
+
+  }
 
   setenv("ASAN_OPTIONS", "abort_on_error=1:"
                          "detect_leaks=0:"
+                         "symbolize=0:"
                          "allocator_may_return_null=1", 0);
 
   setenv("MSAN_OPTIONS", "exit_code=" STRINGIFY(MSAN_ERROR) ":"
+                         "symbolize=0:"
+                         "abort_on_error=1:"
+                         "allocator_may_return_null=1:"
                          "msan_track_origins=0", 0);
+
+  if (getenv("AFL_LD_PRELOAD"))
+    setenv("LD_PRELOAD", getenv("AFL_LD_PRELOAD"), 1);
 
 }
 
@@ -877,9 +905,9 @@ static char** get_qemu_argv(u8* own_loc, char** argv, int argc) {
 
   } else ck_free(own_copy);
 
-  if (!access(AFL_PATH "/afl-qemu-trace", X_OK)) {
+  if (!access(BIN_PATH "/afl-qemu-trace", X_OK)) {
 
-    target_path = new_argv[0] = AFL_PATH "/afl-qemu-trace";
+    target_path = new_argv[0] = BIN_PATH "/afl-qemu-trace";
     return new_argv;
 
   }
@@ -950,8 +978,8 @@ int main(int argc, char** argv) {
 
           }
 
-          if (sscanf(optarg, "%llu%c", &mem_limit, &suffix) < 1)
-            FATAL("Bad syntax used for -m");
+          if (sscanf(optarg, "%llu%c", &mem_limit, &suffix) < 1 ||
+              optarg[0] == '-') FATAL("Bad syntax used for -m");
 
           switch (suffix) {
 
@@ -979,7 +1007,10 @@ int main(int argc, char** argv) {
         timeout_given = 1;
 
         exec_tmout = atoi(optarg);
-        if (exec_tmout < 10) FATAL("Dangerously low value of -t");
+
+        if (exec_tmout < 10 || optarg[0] == '-')
+          FATAL("Dangerously low value of -t");
+
         break;
 
       case 'Q':
@@ -1025,12 +1056,15 @@ int main(int argc, char** argv) {
 
   if (!crash_mode) {
 
-     OKF("Program terminates normally, minimizing in " cCYA "instrumented" cNOR " mode.");
+     OKF("Program terminates normally, minimizing in " 
+         cCYA "instrumented" cRST " mode.");
+
      if (!anything_set()) FATAL("No instrumentation detected.");
 
   } else {
 
-     OKF("Program exits with a signal, minimizing in " cMGN "crash" cNOR " mode.");
+     OKF("Program exits with a signal, minimizing in " cMGN "crash" cRST
+         " mode.");
 
   }
 

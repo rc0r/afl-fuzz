@@ -4,7 +4,7 @@
 
    Written and maintained by Michal Zalewski <lcamtuf@google.com>
 
-   Copyright 2013, 2014, 2015 Google Inc. All rights reserved.
+   Copyright 2013, 2014, 2015, 2016 Google Inc. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -19,13 +19,18 @@
 
 #include "types.h"
 
+/* Version string: */
+
+#define VERSION             "2.19b"
+
 /******************************************************
  *                                                    *
  *  Settings that may be of interest to power users:  *
  *                                                    *
  ******************************************************/
 
-/* Comment out to disable terminal colors: */
+/* Comment out to disable terminal colors (note that this makes afl-analyze
+   a lot less nice): */
 
 #define USE_COLOR
 
@@ -88,10 +93,10 @@
 /* Maximum stacking for havoc-stage tweaks. The actual value is calculated
    like this: 
 
-   n = random between 0 and HAVOC_STACK_POW2
+   n = random between 1 and HAVOC_STACK_POW2
    stacking = 2^n
 
-   In other words, the default (n = 7) produces 1, 2, 4, 8, 16, 32, 64, or
+   In other words, the default (n = 7) produces 2, 4, 8, 16, 32, 64, or
    128 stacked tweaks: */
 
 #define HAVOC_STACK_POW2    7
@@ -250,9 +255,10 @@
 
 #define RESEED_RNG          10000
 
-/* Maximum line length passed from GCC to 'as': */
+/* Maximum line length passed from GCC to 'as' and used for parsing
+   configuration files: */
 
-#define MAX_AS_LINE         8192
+#define MAX_LINE            8192
 
 /* Environment variable used to pass SHM ID to the called program. */
 
@@ -262,6 +268,13 @@
 
 #define CLANG_ENV_VAR       "__AFL_CLANG_MODE"
 #define AS_LOOP_ENV_VAR     "__AFL_AS_LOOPCHECK"
+#define PERSIST_ENV_VAR     "__AFL_PERSISTENT"
+#define DEFER_ENV_VAR       "__AFL_DEFER_FORKSRV"
+
+/* In-code signatures for deferred and persistent mode. */
+
+#define PERSIST_SIG         "##SIG_AFL_PERSISTENT##"
+#define DEFER_SIG           "##SIG_AFL_DEFER_FORKSRV##"
 
 /* Distinctive bitmap signature used to indicate failed execution: */
 
@@ -312,6 +325,7 @@
 /* Constants for afl-gotcpu to control busy loop timing: */
 
 #define  CTEST_TARGET_MS    5000
+#define  CTEST_CORE_TRG_MS  1000
 #define  CTEST_BUSY_CYCLES  (10 * 1000 * 1000)
 
 /* Uncomment this to use inferior block-coverage-based instrumentation. Note
