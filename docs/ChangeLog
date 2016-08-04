@@ -24,6 +24,8 @@ Version 2.26b:
 
   - Added support for DYLD_INSERT_LIBRARIES.
 
+  - Renamed AFL_LD_PRELOAD to AFL_PRELOAD.
+
 --------------
 Version 2.25b:
 --------------

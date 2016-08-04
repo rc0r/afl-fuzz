@@ -54,7 +54,7 @@
 
    To use this library, run AFL like so:
 
-   AFL_LD_PRELOAD=/path/to/libdislocator.so ./afl-fuzz [...other params...]
+   AFL_PRELOAD=/path/to/libdislocator.so ./afl-fuzz [...other params...]
 
    You *have* to specify path, even if it's just ./libdislocator.so or
    $PWD/libdislocator.so.
