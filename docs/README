@@ -1,5 +1,5 @@
-**NOTE: FUTURE DEVELOPMENT WILL HAPPEN THROUGH GITLAB AT
-https://gitlab.com/rc0r/afl-utils!**
+NOTE: FUTURE DEVELOPMENT WILL HAPPEN THROUGH GITLAB AT
+https://gitlab.com/rc0r/afl-fuzz
 
 As of June, 6th 2018 this afl-fuzz mirror moved to Gitlab that's why
 this repository is archived and thus read-only until it is entirely
