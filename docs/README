@@ -1,3 +1,20 @@
+**NOTE: FUTURE DEVELOPMENT WILL HAPPEN THROUGH GITLAB AT
+https://gitlab.com/rc0r/afl-utils!**
+
+As of June, 6th 2018 this afl-fuzz mirror moved to Gitlab that's why
+this repository is archived and thus read-only until it is entirely
+removed from Github. Repository removal is scheduled for September,
+15th 2018.
+
+Please report issues and request your merges through the new project
+home. All further discussion - even for existing issues - will take
+place there.
+
+Thank you,
+
+rc0r
+
+
 ==================
 american fuzzy lop
 ==================
